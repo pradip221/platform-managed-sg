@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  dynamically-hardened-platform-security-group
+
+  SAM Template to create platform managed security group per vpc 
+  and manage the security group rules by dynamically allowing AD Management IPs
+
+Globals:
+  Function:
+    Timeout: 300
+
+Mappings: 
+  ADDomains:
+    DEV:
+      domains: '["example.com","google.com"]'
+    PREPROD:
+      domains: '["amazon.com","apple.com"]'
+    PROD:
+      domains: '["yahoo.com","facebook.com"]'
+
+###########################################################################
+#  Parameters
+###########################################################################
+Parameters:
+  Env:
+    Description: Environment type (DEV/PREPROD/PROD)
+    Type: 'String'
+    Default: 'DEV'
+  PlatformSgCreationFunctionName:
+    Description: Name of the PlatformSgCreationFunction
+    Type: 'String'
+    Default: 'platform_sg_creation'
+  PlatformSgAdIpSyncFunctionName:
+    Description: Name of the PlatformSgAdIpSyncFunction
+    Type: 'String'
+    Default: 'platform_sg_ad_ip_sync'
+  PlatformSgCreationLambdaVersion:
+    Description: Version of the PlatformSgCreationFunction
+    Type: 'String'
+  SecurityGroupName:
+    Description: Name of the security group
+    Type: 'String'
+    Default: 'ato-baseline-platform-sg'
+
+Resources:
+  ###########################################################################
+  #  Security Group Custom Resource
+  ###########################################################################
+  PlatformSGCustomResource:
+    Type: 'AWS::CloudFormation::CustomResource'
+    Properties:
+      ServiceToken: !GetAtt PlatformSgCreationFunction.Arn
+      PlatformSgCreationLambdaVersion: !Ref PlatformSgCreationLambdaVersion
+      SecurityGroupName: !Ref SecurityGroupName
+
+  ###########################################################################
+  #  Lambda
+  ###########################################################################
+  PlatformSgCreationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Ref PlatformSgCreationFunctionName
+      CodeUri: src/
+      Handler: platform_sg_creation.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt PlatformSgCreationFunctionRole.Arn
+      Environment:
+        Variables:
+          LOG_LEVEL: 'INFO'
+
+  PlatformSgAdIpSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Ref PlatformSgAdIpSyncFunctionName
+      CodeUri: src/
+      Handler: platform_sg_ad_ip_sync.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt PlatformSgAdIpSyncFunctionRole.Arn
+      Environment:
+        Variables:
+          LOG_LEVEL: 'INFO'
+          SECURITY_GROUP_NAME: !Ref SecurityGroupName
+  
+  ###########################################################################
+  #  Event Rule
+  ###########################################################################
+  PlatformSgAdIpSyncFunctionEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: !Sub An Event to trigger lambda ${PlatformSgAdIpSyncFunction} with target domain names
+      Name: PlatformSgAdIpSyncFunctionEventRule
+      ScheduleExpression: 'rate(5 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PlatformSgAdIpSyncFunction.Arn
+          Id: 'PlatformSgAdIpSyncFunctionEventRuleTarget'
+          Input: !Sub 
+            - '{"domains": ${input_payload} }'
+            - input_payload: !FindInMap
+              - ADDomains
+              - DEV
+              - domains
+
+  PlatformSgAdIpSyncFunctionEventRuleInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PlatformSgAdIpSyncFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PlatformSgAdIpSyncFunctionEventRule.Arn
+
+  ###########################################################################
+  #  IAM Role
+  ###########################################################################
+  PlatformSgCreationFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub mmm-baseline-lambda-${PlatformSgCreationFunctionName}-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: !Sub mmm-baseline-lambda-${PlatformSgCreationFunctionName}-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - "ec2:CreateSecurityGroup"
+                  - "ec2:DescribeSecurityGroups"
+                  - "ec2:DescribeVpcs"
+                Resource:
+                  - '*'
+
+  PlatformSgAdIpSyncFunctionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub mmm-baseline-lambda-${PlatformSgAdIpSyncFunctionName}-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+          # - Effect: Allow
+          #   Principal:
+          #     AWS: arn:aws:iam::978697126183:user/anindita-aws
+          #   Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: !Sub mmm-baseline-lambda-${PlatformSgAdIpSyncFunctionName}-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - "ec2:DescribeSecurityGroups"
+                  - "ec2:DescribeVpcs"
+                  - "ec2:AuthorizeSecurityGroupEgress"
+                  - "ec2:AuthorizeSecurityGroupIngress"
+                  - "ec2:UpdateSecurityGroupRuleDescriptionsEgress"
+                  - "ec2:UpdateSecurityGroupRuleDescriptionsIngress"
+                  - "ec2:CreateTags"
+                Resource:
+                  - '*'
+                  
+

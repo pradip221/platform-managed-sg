@@ -1,0 +1,49 @@
+@startuml Dynamically Hardened Security Group Management Stack
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v14.0/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/ManagementGovernance/all.puml
+!include <awslib/AWSCommon>
+!include <tupadr3/common>
+' Uncomment the following line to create simplified view
+' !include <awslib/AWSSimplified>
+!include <awslib/Compute/Lambda>
+!include <awslib/Storage/S3Bucket>
+!include <awslib/ManagementAndGovernance/CloudWatchEventTimeBased>
+!include AWSPuml/Groups/all.puml
+
+skinparam Nodesep 20
+skinparam Ranksep 20
+skinparam Scale 1.0
+
+skinparam rectangle {
+    RoundCorner<<anyRectanle>> 10
+    BorderColor<<anyRectanle>> Green
+}
+
+rectangle "GitLab" <<anyRectanle>> as gitLab
+rectangle "SAM Build" <<anyRectanle>> as samBuild
+rectangle "SAM Package" <<anyRectanle>> as samPackage
+rectangle "SAM Deploy" <<anyRectanle>> as samDeploy
+' rectangle "Security Group 1" <<anyRectanle>> as sg1
+' rectangle "Security Group 2" <<anyRectanle>> as sg2
+CloudWatchEventTimeBased(clWatch, "Cloud watch Event", "Trigger Cloudwatch event every 5 min")
+S3Bucket(s3, 'sam-central-deployment-bucket', 'Path = /<repo>/')
+Lambda(LambdacustomResource, "dynamic_sg_creation_function","Custom Resource to create Security Groups")
+Lambda(LambdaSgAdIpSync, "dynamic_sg_ad_ip_sync","Lambda to sync the AD resolved IPs and security group rules")
+SecurityGroupGroup(sg1, "Security group 1")
+SecurityGroupGroup(sg2, "Security group 2")
+
+' left to right direction
+gitLab -right-> samBuild : GitLab event triggering SAM Build
+samBuild -right-> samPackage : SAM artifacts are packaged 
+samPackage -down-> s3 : SAM artifacts are pushed to centralised bucket
+s3 -down-> samDeploy : SAM deployment is triggered
+samDeploy -left--> LambdacustomResource : Custom Resource
+samDeploy -right--> LambdaSgAdIpSync : Lambda to sync AD IPs in SG Rules
+clWatch -down-> LambdaSgAdIpSync : Cloudwatch event triggers Lambda to sync AD IPs every 5 min
+LambdacustomResource ----down-> sg1: Creates Security Group 1
+LambdacustomResource -down-> sg2: Creates Security Group 2
+LambdaSgAdIpSync -> sg1: Syncs the AD IPs in SG Rules
+LambdaSgAdIpSync ---> sg2:  Syncs the AD IPs in SG Rules
+@enduml

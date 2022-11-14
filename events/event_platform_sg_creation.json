@@ -1,0 +1,19 @@
+{
+    "RequestType": "Update",
+    "ServiceToken": "arn:aws:lambda:ap-southeast-2:978697126183:function:dynamic_sg_creation",
+    "ResponseURL": "https://cloudformation-custom-resource-response-apsoutheast2.s3-ap-southeast-2.amazonaws.com/arn%3Aaws%3Acloudformation%3Aap-southeast-2%3A978697126183%3Astack/dynamic-hardened-sg/a0d81cb0-5bfb-11ed-855c-020e4a119ca4%7CDynamicHardenedSGCustomResource%7C263ce0f5-6891-446e-8974-969c839ebdae?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20221106T233802Z&X-Amz-SignedHeaders=host&X-Amz-Expires=7200&X-Amz-Credential=AKIA6MM33IIZQP2ASYV3%2F20221106%2Fap-southeast-2%2Fs3%2Faws4_request&X-Amz-Signature=a4a5ec70916bd47ea96bb1db43cff6dfb991f2d906c0c015faeba8b5ce8c7f76",
+    "StackId": "arn:aws:cloudformation:ap-southeast-2:978697126183:stack/dynamic-hardened-sg/a0d81cb0-5bfb-11ed-855c-020e4a119ca4",
+    "RequestId": "263ce0f5-6891-446e-8974-969c839ebdae",
+    "LogicalResourceId": "DynamicHardenedSGCustomResource",
+    "PhysicalResourceId": "DynamicHardenedSGCustomResource",
+    "ResourceType": "AWS::CloudFormation::CustomResource",
+    "ResourceProperties": {
+        "ServiceToken": "arn:aws:lambda:ap-southeast-2:978697126183:function:dynamic_sg_creation",
+        "SecurityGroupName": "mmm-baseline-platform-sg",
+        "DynamicSgCreationLambdaVersion": "7f52a695ef175116a57e7d595db38ed1"
+    },
+    "OldResourceProperties": {
+        "ServiceToken": "arn:aws:lambda:ap-southeast-2:978697126183:function:dynamic_sg_creation",
+        "DynamicSgCreationLambdaVersion": "6247fcb073829322f1f5ceb1d74003be"
+    }
+}
